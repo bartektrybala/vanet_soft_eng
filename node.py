@@ -1,28 +1,49 @@
+from functools import cached_property
 import re
 from dataclasses import dataclass, field
+import time
 
 from rich import print
 
 from serializers import serialize_pem_pk_to_int
+from settings import MASTER_CLOCK_PREFIX
 
 
 @dataclass
 class Node:
     pk: str
     public_keys: list[int] = field(default_factory=list)
+    timestamp: float = field(init=False, default_factory=time.time)
+
+    @cached_property
+    def pk_int(self) -> int:
+        return serialize_pem_pk_to_int(pem_pk=self.pk)
+
+    @property
+    def is_master(self) -> bool:
+        if len(self.public_keys) == 0:
+            return False
+        return self.public_keys[0] == self.pk_int
 
     def add_public_key(self, message: str):
-        pk_pem = extract_pem_public_key_from_message(message=message)
-        public_key = serialize_pem_pk_to_int(message=pk_pem)
+        pem_pk = extract_pem_public_key_from_message(message=message)
+        public_key = serialize_pem_pk_to_int(pem_pk=pem_pk)
 
         if public_key not in self.public_keys:
             self.public_keys.append(public_key)
-            self.sort_public_keys()
+            self._sort_public_keys()
 
-        print("------------------PUBLIC KEYS------------------")
+        print("\n------------------PUBLIC KEYS------------------")
         print(self.public_keys)
 
-    def sort_public_keys(self):
+    def update_timestamp(self, message: str):
+        message = message.replace(MASTER_CLOCK_PREFIX, "")
+        self.timestamp = float(message)
+
+        print("\n------------------TIMESTAMP------------------")
+        print(self.timestamp)
+
+    def _sort_public_keys(self):
         self.public_keys.sort()
 
 

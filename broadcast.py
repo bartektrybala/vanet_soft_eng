@@ -11,7 +11,9 @@ from settings import (
     BROADCAST_HOST,
     BROADCAST_PORT,
     COLLECT_PK_LIST_PREFIX,
+    MASTER_CLOCK_PREFIX,
     PUBLIC_KEY_BROADCAST_PREFIX,
+    SYNCHRONIZE_CLOCK_PREFIX,
 )
 
 
@@ -32,7 +34,8 @@ class BroadcastSocket(socket.socket):
         while True:
             data, addr = self.recvfrom(1024)
             message = data.decode("utf-8")
-            print(f"message: {message} from {addr}")
+            print("\n------------------MESSAGE------------------")
+            print(message)
             self.parse_message(message=message)
 
     def parse_message(self, message: str):
@@ -43,6 +46,14 @@ class BroadcastSocket(socket.socket):
         elif parser.is_pk_collection_message:
             # someone wants to collect all the pks, so broadcast yours
             Broadcaster.broadcast_public_key(node=self.node, socket=self)
+        elif parser.is_sync_clock_message and self.node.is_master:
+            # someone wants to synchronize clocks, so master broadcasts his timestamp
+            # TODO: sign timestamp with master's private key
+            Broadcaster.broadcast_master_clock(node=self.node, socket=self)
+        elif parser.is_master_clock_message:
+            # master broadcasted his timestamp, so update yours
+            # TODO: validate master's signature
+            self.node.update_timestamp(message=message)
 
     def start_listen(self):
         print("Listening...")
@@ -74,15 +85,37 @@ class Broadcaster:
             socket=socket,
         )
 
+    @staticmethod
+    def synchronize_clock(socket: BroadcastSocket):
+        Broadcaster.broadcast(
+            message_prefix=SYNCHRONIZE_CLOCK_PREFIX,
+            message="",
+            socket=socket,
+        )
+
+    @staticmethod
+    def broadcast_master_clock(node: Node, socket: BroadcastSocket):
+        Broadcaster.broadcast(
+            message_prefix=MASTER_CLOCK_PREFIX,
+            message=str(node.timestamp),
+            socket=socket,
+        )
+
 
 @dataclass
 class Parser:
     message: str
     is_pk_broadcast_message: bool = field(init=False, default=False)
     is_pk_collection_message: bool = field(init=False, default=False)
+    is_sync_clock_message: bool = field(init=False, default=False)
+    is_master_clock_message: bool = field(init=False, default=False)
 
     def __post_init__(self):
         if self.message.startswith(PUBLIC_KEY_BROADCAST_PREFIX):
             self.is_pk_broadcast_message = True
         elif self.message.startswith(COLLECT_PK_LIST_PREFIX):
             self.is_pk_collection_message = True
+        elif self.message.startswith(SYNCHRONIZE_CLOCK_PREFIX):
+            self.is_sync_clock_message = True
+        elif self.message.startswith(MASTER_CLOCK_PREFIX):
+            self.is_master_clock_message = True

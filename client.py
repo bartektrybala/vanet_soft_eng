@@ -19,3 +19,4 @@ client = BroadcastSocket(node=node)
 client.start_listen()
 
 Broadcaster.collect_public_keys(socket=client)
+Broadcaster.synchronize_clock(socket=client)
