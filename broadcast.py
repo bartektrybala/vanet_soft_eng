@@ -1,7 +1,11 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+
 import socket
+from dataclasses import dataclass, field
 from threading import Thread
+
+from rich import print
+
 from node import Node
 from settings import (
     BROADCAST_HOST,
@@ -9,7 +13,6 @@ from settings import (
     COLLECT_PK_LIST_PREFIX,
     PUBLIC_KEY_BROADCAST_PREFIX,
 )
-from rich import print
 
 
 class BroadcastSocket(socket.socket):
@@ -43,8 +46,7 @@ class BroadcastSocket(socket.socket):
 
     def start_listen(self):
         print("Listening...")
-        self.listen_thread = Thread(target=self._listen_to_broadcast)
-        self.listen_thread.start()
+        Thread(target=self._listen_to_broadcast).start()
 
     def broadcast(self, message: str):
         Broadcaster.broadcast(message_prefix="", message=message, socket=self)
