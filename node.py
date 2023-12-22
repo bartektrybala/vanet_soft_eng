@@ -1,7 +1,7 @@
-from functools import cached_property
 import re
-from dataclasses import dataclass, field
 import time
+from dataclasses import dataclass, field
+from functools import cached_property
 
 from rich import print
 
