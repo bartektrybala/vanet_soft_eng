@@ -5,6 +5,7 @@ from functools import cached_property
 
 from rich import print
 
+from message import MessageTimeGenerator
 from serializers import serialize_pem_pk_to_int
 from settings import MASTER_CLOCK_PREFIX
 
@@ -25,6 +26,14 @@ class Node:
             return False
         return self.public_keys[0] == self.pk_int
 
+    @property
+    def node_number(self) -> int:
+        return self.public_keys.index(self.pk_int) + 1
+
+    @property
+    def next_message_timestamp(self) -> float:
+        return next(MessageTimeGenerator(self.timestamp))
+
     def add_public_key(self, message: str):
         pem_pk = extract_pem_public_key_from_message(message=message)
         public_key = serialize_pem_pk_to_int(pem_pk=pem_pk)
@@ -42,6 +51,9 @@ class Node:
 
         print("\n------------------TIMESTAMP------------------")
         print(self.timestamp)
+
+    def setup_periodic_message_broadcast(self):
+        ...
 
     def _sort_public_keys(self):
         self.public_keys.sort()

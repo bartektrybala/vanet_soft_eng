@@ -9,12 +9,14 @@ from typing import TypedDict, cast
 from rich import print
 
 from node import Node
+from scheduler import MessageScheduler
 from settings import (
     BROADCAST_HOST,
     BROADCAST_PORT,
     COLLECT_PK_LIST_PREFIX,
     MASTER_CLOCK_PREFIX,
     PUBLIC_KEY_BROADCAST_PREFIX,
+    SECURITY_MESSAGE_PREFIX,
     SYNCHRONIZE_CLOCK_PREFIX,
 )
 
@@ -26,7 +28,8 @@ class BroadcastMessage(TypedDict):
 
 class BroadcastSocket(socket.socket):
     node: Node
-    listen_thread: Thread
+    listen_thread: Thread | None
+    periodic_message_thread: Thread | None
 
     def __init__(
         self, node: Node, host: str = BROADCAST_HOST, port: int = BROADCAST_PORT
@@ -35,15 +38,19 @@ class BroadcastSocket(socket.socket):
         self.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.bind((host, port))
-        self.node = node
 
-    def _listen_to_broadcast(self):
-        while True:
-            data, addr = self.recvfrom(1024)
-            message = cast(BroadcastMessage, json.loads(data.decode("utf-8")))
-            print("\n------------------MESSAGE------------------")
-            print(message)
-            self.parse_message(message=message)
+        self.node = node
+        self.listen_thread = None
+        self.periodic_message_thread = None
+
+    def broadcast(self, message: str):
+        Broadcaster.broadcast(prefix="", message=message, socket=self)
+
+    def start_listen(self):
+        print("Listening...")
+        if self.listen_thread is None or not self.listen_thread.is_alive():
+            self.listen_thread = Thread(target=self._listen_to_broadcast)
+            self.listen_thread.start()
 
     def parse_message(self, message: BroadcastMessage):
         parser = Parser(message=message)
@@ -61,13 +68,32 @@ class BroadcastSocket(socket.socket):
             # master broadcasted his timestamp, so update yours
             # TODO: validate master's signature
             self.node.update_timestamp(message=message["message"])
+            self._start_periodic_messaging()
 
-    def start_listen(self):
-        print("Listening...")
-        Thread(target=self._listen_to_broadcast).start()
+    def _start_periodic_messaging(self):
+        if (
+            self.periodic_message_thread is None
+            or not self.periodic_message_thread.is_alive()
+        ):
+            self.periodic_message_thread = Thread(
+                target=lambda: MessageScheduler.setup_periodic_messaging(
+                    node=self.node,
+                    task=lambda: Broadcaster.broadcast(
+                        prefix=SECURITY_MESSAGE_PREFIX,
+                        message=str(self.node.node_number),
+                        socket=self,
+                    ),
+                )
+            )
+            self.periodic_message_thread.start()
 
-    def broadcast(self, message: str):
-        Broadcaster.broadcast(prefix="", message=message, socket=self)
+    def _listen_to_broadcast(self):
+        while True:
+            data, addr = self.recvfrom(1024)
+            message = cast(BroadcastMessage, json.loads(data.decode("utf-8")))
+            print("\n------------------MESSAGE------------------")
+            print(message)
+            self.parse_message(message=message)
 
 
 class Broadcaster:
