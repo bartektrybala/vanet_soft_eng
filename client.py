@@ -5,9 +5,9 @@ from typing import cast
 from broadcast import Broadcaster, BroadcastSocket
 from node import Node
 from settings import (
-    KEYS_FOLDER,
-    KEYFILE_FORMAT,
     COLLECT_PK_LIST_PREFIX,
+    PUBLIC_KEY_FILE_FORMAT,
+    PUBLIC_KEYS_FOLDER,
     SYNCHRONIZE_CLOCK_PREFIX,
 )
 
@@ -17,19 +17,27 @@ def get_key(key_idx: int) -> str:
     Provides a "lazier" way to get the public key from the file using the
     node's index.
     """
-    print(f"Getting key from file {KEYS_FOLDER}/{KEYFILE_FORMAT.format(key_idx)}")
+    print(
+        f"Getting key from file "
+        f"{PUBLIC_KEYS_FOLDER}/{PUBLIC_KEY_FILE_FORMAT.format(key_idx)}"
+    )
     try:
-        with open(f"{KEYS_FOLDER}/{KEYFILE_FORMAT.format(key_idx)}", "r") as key_file:
+        with open(
+            f"{PUBLIC_KEYS_FOLDER}/{PUBLIC_KEY_FILE_FORMAT.format(key_idx)}", "r"
+        ) as key_file:
             return key_file.read()
     except FileNotFoundError:
-        print(f"Could not find key file {KEYS_FOLDER}/{KEYFILE_FORMAT.format(key_idx)}")
+        print(
+            f"Could not find key file "
+            f"{PUBLIC_KEYS_FOLDER}/{PUBLIC_KEY_FILE_FORMAT.format(key_idx)}"
+        )
         exit(1)
 
 
 def main():
     parser = ArgumentParser(description="Node in VANET network")
 
-    # Either --pki or --pk must be provided.
+    # Either --pki or --pkp must be provided.
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--pkp", type=FileType("r"), help="Public key path [PEM format]")
     group.add_argument(

@@ -14,10 +14,10 @@ from settings import (
     BROADCAST_PORT,
     COLLECT_PK_LIST_PREFIX,
     MASTER_CLOCK_PREFIX,
+    MESSAGE_DATA,
     PUBLIC_KEY_BROADCAST_PREFIX,
     SECURITY_MESSAGE_PREFIX,
     SYNCHRONIZE_CLOCK_PREFIX,
-    MESSAGE_DATA,
 )
 
 
@@ -34,8 +34,14 @@ class BroadcastSocket(socket.socket):
     def __init__(
         self, node: Node, host: str = BROADCAST_HOST, port: int = BROADCAST_PORT
     ):
+        # Use IPv4 and UDP
         super().__init__(socket.AF_INET, socket.SOCK_DGRAM)
+
+        # SOL_SOCKET specifies that parameters are set at the socket layer itself
+        # and e.g. not at the TCP layer
+        # Allow multiple application to listen to the same port
         self.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        # Allow broadcast
         self.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.bind((host, port))
 
@@ -43,16 +49,21 @@ class BroadcastSocket(socket.socket):
         self.listen_thread = None
         self.periodic_message_thread = None
 
-    def broadcast(self, message: str):
-        Broadcaster.broadcast(prefix="", message=message, socket=self)
-
     def start_listen(self):
         print("Listening...")
         if self.listen_thread is None or not self.listen_thread.is_alive():
             self.listen_thread = Thread(target=self._listen_to_broadcast)
             self.listen_thread.start()
 
-    def handle_message(self, message: BroadcastMessage):
+    def _listen_to_broadcast(self):
+        while True:
+            data, addr = self.recvfrom(1024)
+            message = cast(BroadcastMessage, json.loads(data.decode("utf-8")))
+            print("\n------------------MESSAGE------------------")
+            print(message)
+            self._handle_message(message=message)
+
+    def _handle_message(self, message: BroadcastMessage):
         message_prefix = message["prefix"]
         if message_prefix == PUBLIC_KEY_BROADCAST_PREFIX:
             # someone broadcasted their pk, so add it to your list
@@ -95,14 +106,6 @@ class BroadcastSocket(socket.socket):
             )
             self.periodic_message_thread.start()
 
-    def _listen_to_broadcast(self):
-        while True:
-            data, addr = self.recvfrom(1024)
-            message = cast(BroadcastMessage, json.loads(data.decode("utf-8")))
-            print("\n------------------MESSAGE------------------")
-            print(message)
-            self.handle_message(message=message)
-
 
 class Broadcaster:
     @staticmethod
@@ -120,7 +123,8 @@ class Broadcaster:
         else:
             if kwargs:
                 print(
-                    f'Message format is "{message_format}" but some message was provided: {kwargs}. '
+                    f'Message format is "{message_format}" but some message'
+                    f"was provided: {kwargs}. "
                     f"Broadcast with prefix {prefix} failed."
                 )
                 return

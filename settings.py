@@ -1,8 +1,11 @@
 BROADCAST_HOST = ""
 BROADCAST_PORT = 50000
 
-KEYS_FOLDER = "./keys"
-KEYFILE_FORMAT = "public_key{}.pem"
+PUBLIC_KEYS_FOLDER = "./public_keys"
+PUBLIC_KEY_FILE_FORMAT = "public_key_{}.pem"
+
+PRIVATE_KEYS_FOLDER = "./private_keys"
+PRIVATE_KEY_FILE_FORMAT = "private_key_{}.pem"
 
 MESSAGE_INTERVAL = 10
 

@@ -11,5 +11,7 @@ class MessageScheduler:
     @staticmethod
     def setup_periodic_messaging(node: Node, task: Callable):
         while True:
-            scheduler.enterabs(node.next_message_timestamp, 1, task)
+            scheduler.enterabs(
+                time=node.next_message_timestamp, priority=1, action=task
+            )
             scheduler.run()
