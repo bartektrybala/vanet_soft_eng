@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import socket
-from dataclasses import dataclass, field
 from threading import Thread
 from typing import TypedDict, cast
 
@@ -18,6 +17,7 @@ from settings import (
     PUBLIC_KEY_BROADCAST_PREFIX,
     SECURITY_MESSAGE_PREFIX,
     SYNCHRONIZE_CLOCK_PREFIX,
+    MESSAGE_DATA,
 )
 
 
@@ -52,19 +52,27 @@ class BroadcastSocket(socket.socket):
             self.listen_thread = Thread(target=self._listen_to_broadcast)
             self.listen_thread.start()
 
-    def parse_message(self, message: BroadcastMessage):
-        parser = Parser(message=message)
-        if parser.is_pk_broadcast_message:
+    def handle_message(self, message: BroadcastMessage):
+        message_prefix = message["prefix"]
+        if message_prefix == PUBLIC_KEY_BROADCAST_PREFIX:
             # someone broadcasted their pk, so add it to your list
             self.node.add_public_key(message=message["message"])
-        elif parser.is_pk_collection_message:
+        elif message_prefix == COLLECT_PK_LIST_PREFIX:
             # someone wants to collect all the pks, so broadcast yours
-            Broadcaster.broadcast_public_key(node=self.node, socket=self)
-        elif parser.is_sync_clock_message and self.node.is_master:
+            Broadcaster.broadcast(
+                prefix=PUBLIC_KEY_BROADCAST_PREFIX,
+                socket=self,
+                node_pk=self.node.pk,
+            )
+        elif message_prefix == SYNCHRONIZE_CLOCK_PREFIX:
             # someone wants to synchronize clocks, so master broadcasts his timestamp
             # TODO: sign timestamp with master's private key
-            Broadcaster.broadcast_master_clock(node=self.node, socket=self)
-        elif parser.is_master_clock_message:
+            Broadcaster.broadcast(
+                prefix=MASTER_CLOCK_PREFIX,
+                socket=self,
+                timestamp=str(self.node.timestamp),
+            )
+        elif message_prefix == MASTER_CLOCK_PREFIX:
             # master broadcasted his timestamp, so update yours
             # TODO: validate master's signature
             self.node.update_timestamp(message=message["message"])
@@ -80,8 +88,8 @@ class BroadcastSocket(socket.socket):
                     node=self.node,
                     task=lambda: Broadcaster.broadcast(
                         prefix=SECURITY_MESSAGE_PREFIX,
-                        message=str(self.node.node_number),
                         socket=self,
+                        node_number=str(self.node.node_number),
                     ),
                 )
             )
@@ -93,63 +101,31 @@ class BroadcastSocket(socket.socket):
             message = cast(BroadcastMessage, json.loads(data.decode("utf-8")))
             print("\n------------------MESSAGE------------------")
             print(message)
-            self.parse_message(message=message)
+            self.handle_message(message=message)
 
 
 class Broadcaster:
     @staticmethod
-    def broadcast(prefix: str, message: str, socket: BroadcastSocket):
+    def broadcast(prefix: str, socket: BroadcastSocket, **kwargs):
+        message_format = MESSAGE_DATA[prefix].get("message_fmt")
+        if message_format:
+            try:
+                message = message_format.format(**kwargs)
+            except KeyError:
+                print(
+                    f'Message format "{message_format}" could not be formatted. '
+                    f"Broadcast with prefix {prefix} failed."
+                )
+                return
+        else:
+            if kwargs:
+                print(
+                    f'Message format is "{message_format}" but some message was provided: {kwargs}. '
+                    f"Broadcast with prefix {prefix} failed."
+                )
+                return
+            message = ""
+
         message = BroadcastMessage(prefix=prefix, message=message)
         bytes = json.dumps(message).encode("utf-8")
         socket.sendto(bytes, ("<broadcast>", BROADCAST_PORT))
-
-    @staticmethod
-    def broadcast_public_key(node: Node, socket: BroadcastSocket):
-        Broadcaster.broadcast(
-            prefix=PUBLIC_KEY_BROADCAST_PREFIX,
-            message=node.pk,
-            socket=socket,
-        )
-
-    @staticmethod
-    def collect_public_keys(socket: BroadcastSocket):
-        Broadcaster.broadcast(
-            prefix=COLLECT_PK_LIST_PREFIX,
-            message="",
-            socket=socket,
-        )
-
-    @staticmethod
-    def synchronize_clock(socket: BroadcastSocket):
-        Broadcaster.broadcast(
-            prefix=SYNCHRONIZE_CLOCK_PREFIX,
-            message="",
-            socket=socket,
-        )
-
-    @staticmethod
-    def broadcast_master_clock(node: Node, socket: BroadcastSocket):
-        Broadcaster.broadcast(
-            prefix=MASTER_CLOCK_PREFIX,
-            message=str(node.timestamp),
-            socket=socket,
-        )
-
-
-@dataclass
-class Parser:
-    message: BroadcastMessage
-    is_pk_broadcast_message: bool = field(init=False, default=False)
-    is_pk_collection_message: bool = field(init=False, default=False)
-    is_sync_clock_message: bool = field(init=False, default=False)
-    is_master_clock_message: bool = field(init=False, default=False)
-
-    def __post_init__(self):
-        if self.message["prefix"] == PUBLIC_KEY_BROADCAST_PREFIX:
-            self.is_pk_broadcast_message = True
-        elif self.message["prefix"] == COLLECT_PK_LIST_PREFIX:
-            self.is_pk_collection_message = True
-        elif self.message["prefix"] == SYNCHRONIZE_CLOCK_PREFIX:
-            self.is_sync_clock_message = True
-        elif self.message["prefix"] == MASTER_CLOCK_PREFIX:
-            self.is_master_clock_message = True

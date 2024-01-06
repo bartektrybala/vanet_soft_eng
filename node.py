@@ -24,6 +24,7 @@ class Node:
     def is_master(self) -> bool:
         if len(self.public_keys) == 0:
             return False
+        # Master is the first node on the list
         return self.public_keys[0] == self.pk_int
 
     @property
