@@ -79,25 +79,3 @@ class Node:
 
     def _sort_public_keys(self):
         self.public_keys.sort()
-
-
-# Unused - kept for reference
-#
-# [TODO] probably add some enum for key_type to be sure we get the kind
-# of key we expected (i.e. if somebody passed a message with a private key but we
-# needed a public key we wouldn't notice we extraced a private key instead)
-#
-# On the other hand, next step is usually serialization which would probably
-# crash anyway
-# import re
-# def extract_pem_key_from_message(message: str) -> str:
-# """
-# Extracts either public or private key from message
-# """
-# pem_regex_pattern = (
-#     r"-----BEGIN (PUBLIC|PRIVATE) KEY-----"
-#     r"([\s\S]*?)"
-#     r"-----END (PUBLIC|PRIVATE) KEY-----"
-# )
-# pk_pem = re.search(pem_regex_pattern, message)
-# return pk_pem.group(0)

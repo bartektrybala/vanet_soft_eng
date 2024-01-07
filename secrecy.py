@@ -1,5 +1,7 @@
 import mcl
 
+from data_utils import extract_pem_key_from_message, get_file_contents
+
 # [TODO] Temporary solution
 _SEC_PAR = b"abc"
 GENERATOR = mcl.G1.hashAndMapTo(_SEC_PAR)
@@ -7,22 +9,16 @@ GENERATOR = mcl.G1.hashAndMapTo(_SEC_PAR)
 
 class SecrecyEngine:
     def __init__(self, secret_key_path: str, public_key_path: str):
-        self.secret_key = self._get_key_from_file(secret_key_path)
+        sk_file_contents = get_file_contents(secret_key_path, "r")
+        self.secret_key = extract_pem_key_from_message(sk_file_contents)
         # [TODO] Never used since session private and public keys are generated
         # using the master key and only session public key is shared
-        self.public_key = self._get_key_from_file(public_key_path)
+        pk_file_contents = get_file_contents(public_key_path, "r")
+        self.public_key = extract_pem_key_from_message(pk_file_contents)
+
         self.generator = GENERATOR
         self.session_sk = mcl.Fr()
         self.session_pk = mcl.G1()
-
-    def _get_key_from_file(self, key_path: str) -> str:
-        try:
-            with open(key_path, "r") as key_file:
-                file_contents = key_file.read()
-                return file_contents
-        except FileNotFoundError:
-            print(f"Could not find key file " f"{key_path}")
-            exit(1)
 
     def gen_session_keys(self):
         random_fr = mcl.Fr.rnd()
