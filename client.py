@@ -1,3 +1,5 @@
+import signal
+import sys
 from argparse import ArgumentParser, FileType
 from io import TextIOWrapper
 from typing import cast
@@ -10,6 +12,18 @@ from settings import (
     PUBLIC_KEYS_FOLDER,
     SYNCHRONIZE_CLOCK_PREFIX,
 )
+
+client: BroadcastSocket | None = None
+
+def signal_handler(sig, frame):
+    global client
+    if client is None:
+        print("Interrupted by user, stopping the main thread...")
+        sys.exit(0)
+    else:
+        print("Interrupted by user, informing other nodes and stopping threads...")
+        client.stop_threads_and_close()
+        sys.exit(0)
 
 
 def get_key(key_idx: int) -> str:
@@ -35,6 +49,7 @@ def get_key(key_idx: int) -> str:
 
 
 def main():
+    signal.signal(signal.SIGINT, signal_handler)
     parser = ArgumentParser(description="Node in VANET network")
 
     # Either --pki or --pkp must be provided.
@@ -54,6 +69,7 @@ def main():
         pk_file = cast(TextIOWrapper, args.pk)
         public_key = pk_file.read()
 
+    global client
     node = Node(pk=public_key)
     client = BroadcastSocket(node=node)
     client.start_listen()

@@ -36,14 +36,30 @@ class Node:
         return next(MessageTimeGenerator(self.timestamp))
 
     def add_public_key(self, message: str):
-        pem_pk = extract_pem_public_key_from_message(message=message)
+        pem_pk = extract_pem_key_from_message(message=message)
         public_key = serialize_pem_pk_to_int(pem_pk=pem_pk)
 
         if public_key not in self.public_keys:
             self.public_keys.append(public_key)
             self._sort_public_keys()
 
-        print("\n------------------PUBLIC KEYS------------------")
+        print("\n------------------PUBLIC KEYS [NEW ADDED] ------------------")
+        print(self.public_keys)
+
+    def remove_public_key(self, message: str):
+        pem_pk = extract_pem_key_from_message(message=message)
+        public_key = serialize_pem_pk_to_int(pem_pk=pem_pk)
+
+        if public_key in self.public_keys:
+            self.public_keys.remove(public_key)
+            self._sort_public_keys()
+        else:
+            print(
+                f"[!!!] Did not find public key {public_key} in the list of "
+                f"public keys. Might be a malicious node trying to disconnect."
+            )
+
+        print("\n------------------PUBLIC KEYS [ONE REMOVED] ------------------")
         print(self.public_keys)
 
     def update_timestamp(self, message: str):
@@ -60,7 +76,20 @@ class Node:
         self.public_keys.sort()
 
 
-def extract_pem_public_key_from_message(message: str) -> str:
-    pem_regex_pattern = r"-----BEGIN PUBLIC KEY-----([\s\S]*?)-----END PUBLIC KEY-----"
+# [TODO] probably add some enum for key_type to be sure we get the kind
+# of key we expected (i.e. if somebody passed a message with a private key but we
+# needed a public key we wouldn't notice we extraced a private key instead)
+#
+# On the other hand, next step is usually serialization which would probably
+# crash anyway
+def extract_pem_key_from_message(message: str) -> str:
+    """
+    Extracts either public or private key from message
+    """
+    pem_regex_pattern = (
+        r"-----BEGIN (PUBLIC|PRIVATE) KEY-----"
+        r"([\s\S]*?)"
+        r"-----END (PUBLIC|PRIVATE) KEY-----"
+    )
     pk_pem = re.search(pem_regex_pattern, message)
     return pk_pem.group(0)

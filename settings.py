@@ -14,6 +14,7 @@ COLLECT_PK_LIST_PREFIX = "COLLECT_PK_LIST_PREFIX#"
 SYNCHRONIZE_CLOCK_PREFIX = "SYNCHRONIZE_CLOCK_PREFIX#"
 SECURITY_MESSAGE_PREFIX = "SECURITY_MESSAGE_PREFIX#"
 MASTER_CLOCK_PREFIX = "MASTER_CLOCK_PREFIX#"
+NODE_DISCONNECT_PREFIX = "NODE_DISCONNECT_PREFIX#"
 
 # Specified as a dictionary of dictionaries for extensibility
 # Messages are defined by their prefix
@@ -23,4 +24,5 @@ MESSAGE_DATA = {
     SYNCHRONIZE_CLOCK_PREFIX: {"message_fmt": ""},
     SECURITY_MESSAGE_PREFIX: {"message_fmt": "{node_number}"},
     MASTER_CLOCK_PREFIX: {"message_fmt": "{timestamp}"},
+    NODE_DISCONNECT_PREFIX: {"message_fmt": "{node_pk}"},
 }
