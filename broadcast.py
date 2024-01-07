@@ -14,6 +14,7 @@ from settings import (
     BROADCAST_HOST,
     BROADCAST_PORT,
     COLLECT_PK_LIST_PREFIX,
+    LISTEN_THREAD_TIMEOUT,
     MASTER_CLOCK_PREFIX,
     MESSAGE_DATA,
     NODE_DISCONNECT_PREFIX,
@@ -40,6 +41,9 @@ class BroadcastSocket(socket.socket):
     ):
         # Use IPv4 and UDP
         super().__init__(socket.AF_INET, socket.SOCK_DGRAM)
+        # Stop blocking for a moment every 5 seconds - needed to stop the thread in
+        # case of KeyboardInterrupt and some code failure
+        self.settimeout(LISTEN_THREAD_TIMEOUT)
 
         # SOL_SOCKET specifies that parameters are set at the socket layer itself
         # and e.g. not at the TCP layer
@@ -67,7 +71,7 @@ class BroadcastSocket(socket.socket):
             self.periodic_message_thread.join()
 
         Broadcaster.broadcast(
-            prefix=NODE_DISCONNECT_PREFIX, socket=self, node_pk=self.node.pk
+            prefix=NODE_DISCONNECT_PREFIX, socket=self, node_pk=self.node.session_pk_str
         )
         self.close()
 
@@ -79,23 +83,27 @@ class BroadcastSocket(socket.socket):
 
     def _listen_to_broadcast(self):
         while not self.stop_threads:
-            data, addr = self.recvfrom(1024)
-            message = cast(BroadcastMessage, json.loads(data.decode("utf-8")))
-            print("\n------------------MESSAGE------------------")
-            print(message)
-            self._handle_message(message=message)
+            try:
+                data, addr = self.recvfrom(1024)
+                message = cast(BroadcastMessage, json.loads(data.decode("utf-8")))
+                print("\n------------------MESSAGE------------------")
+                print(message)
+                self._handle_message(message=message)
+            except socket.timeout:
+                # Give the thread a chance to stop if it was interrupted
+                pass
 
     def _handle_message(self, message: BroadcastMessage):
         message_prefix = message["prefix"]
         if message_prefix == PUBLIC_KEY_BROADCAST_PREFIX:
             # someone broadcasted their pk, so add it to your list
-            self.node.add_public_key(message=message["message"])
+            self.node.add_public_key(pk_str=message["message"])
         elif message_prefix == COLLECT_PK_LIST_PREFIX:
             # someone wants to collect all the pks, so broadcast yours
             Broadcaster.broadcast(
                 prefix=PUBLIC_KEY_BROADCAST_PREFIX,
                 socket=self,
-                node_pk=self.node.pk,
+                node_pk=self.node.session_pk_str,
             )
         elif message_prefix == SYNCHRONIZE_CLOCK_PREFIX:
             # someone wants to synchronize clocks, so master broadcasts his timestamp
@@ -112,7 +120,7 @@ class BroadcastSocket(socket.socket):
             self._start_periodic_messaging()
         elif message_prefix == NODE_DISCONNECT_PREFIX:
             # someone wants to disconnect, so remove their pk from your list
-            self.node.remove_public_key(message=message["message"])
+            self.node.remove_public_key(pk_str=message["message"])
 
     def _start_periodic_messaging(self):
         if (

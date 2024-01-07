@@ -1,19 +1,25 @@
 import signal
 import sys
 from argparse import ArgumentParser, FileType
-from io import TextIOWrapper
-from typing import cast
 
 from broadcast import Broadcaster, BroadcastSocket
 from node import Node
+from secrecy import SecrecyEngine
 from settings import (
     COLLECT_PK_LIST_PREFIX,
     PUBLIC_KEY_FILE_FORMAT,
     PUBLIC_KEYS_FOLDER,
+    SECRET_KEY_FILE_FORMAT,
+    SECRET_KEYS_FOLDER,
     SYNCHRONIZE_CLOCK_PREFIX,
 )
 
+# from io import TextIOWrapper
+# from typing import cast
+
+
 client: BroadcastSocket | None = None
+
 
 def signal_handler(sig, frame):
     global client
@@ -24,28 +30,6 @@ def signal_handler(sig, frame):
         print("Interrupted by user, informing other nodes and stopping threads...")
         client.stop_threads_and_close()
         sys.exit(0)
-
-
-def get_key(key_idx: int) -> str:
-    """
-    Provides a "lazier" way to get the public key from the file using the
-    node's index.
-    """
-    print(
-        f"Getting key from file "
-        f"{PUBLIC_KEYS_FOLDER}/{PUBLIC_KEY_FILE_FORMAT.format(key_idx)}"
-    )
-    try:
-        with open(
-            f"{PUBLIC_KEYS_FOLDER}/{PUBLIC_KEY_FILE_FORMAT.format(key_idx)}", "r"
-        ) as key_file:
-            return key_file.read()
-    except FileNotFoundError:
-        print(
-            f"Could not find key file "
-            f"{PUBLIC_KEYS_FOLDER}/{PUBLIC_KEY_FILE_FORMAT.format(key_idx)}"
-        )
-        exit(1)
 
 
 def main():
@@ -64,13 +48,33 @@ def main():
 
     args = parser.parse_args()
     if args.pki is not None:
-        public_key = get_key(args.pki)
+        keys_index = args.pki
+        public_key_file = (
+            f"{PUBLIC_KEYS_FOLDER}/{PUBLIC_KEY_FILE_FORMAT.format(keys_index)}"
+        )
+        secret_key_file = (
+            f"{SECRET_KEYS_FOLDER}/{SECRET_KEY_FILE_FORMAT.format(keys_index)}"
+        )
     else:
-        pk_file = cast(TextIOWrapper, args.pk)
-        public_key = pk_file.read()
+        # [TODO] fix the flag
+        # pk_file = cast(TextIOWrapper, args.pk)
+        # public_key = pk_file.read()
+        # Inform the user that the flag is not currently supported and that
+        # they should provide the index instead
+        print(
+            "This flag is not currently supported. "
+            "Please provide the index of the public key instead, e.g --pki 1."
+        )
+        exit(1)
 
     global client
-    node = Node(pk=public_key)
+    secrecy_engine = SecrecyEngine(
+        secret_key_path=secret_key_file, public_key_path=public_key_file
+    )
+    secrecy_engine.gen_session_keys()
+    print(f"Session public key: {secrecy_engine.get_session_pk_as_int()}")
+
+    node = Node(secrecy_engine=secrecy_engine)
     client = BroadcastSocket(node=node)
     client.start_listen()
 
