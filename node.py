@@ -17,7 +17,7 @@ class Node:
 
     @cached_property
     def session_pk_str(self) -> str:
-        return self.secrecy_engine.get_session_pk_as_str()
+        return self.secrecy_engine.get_session_pk_as_byte_str().decode("utf-8")
 
     @cached_property
     def session_pk_int(self) -> int:
