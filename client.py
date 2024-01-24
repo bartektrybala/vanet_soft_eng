@@ -72,7 +72,7 @@ def main():
         secret_key_path=secret_key_file, public_key_path=public_key_file
     )
     secrecy_engine.gen_session_keys()
-    print(f"Session public key: {secrecy_engine.get_session_pk_as_int()}")
+    print(f"Session public key: {secrecy_engine.get_session_pk1_as_int()}")
 
     node = Node(secrecy_engine=secrecy_engine)
     client = BroadcastSocket(node=node)

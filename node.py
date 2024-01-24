@@ -17,11 +17,11 @@ class Node:
 
     @cached_property
     def session_pk_str(self) -> str:
-        return self.secrecy_engine.get_session_pk_as_byte_str().decode("utf-8")
+        return self.secrecy_engine.get_session_pk1_as_byte_str().decode("utf-8")
 
     @cached_property
     def session_pk_int(self) -> int:
-        return self.secrecy_engine.get_session_pk_as_int()
+        return self.secrecy_engine.get_session_pk1_as_int()
 
     @property
     def is_master(self) -> bool:
