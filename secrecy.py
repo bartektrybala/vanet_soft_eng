@@ -4,6 +4,7 @@ import mcl
 
 from utils.data_utils import extract_pem_key_from_message, get_file_contents
 from utils.hashing import Hasher, pad_message, unpad_message, xor_bytes
+import random as rand
 
 # [TODO] Temporary solution
 _SEC_PAR = b"abc"
@@ -102,7 +103,7 @@ class SecrecyEngine:
 
         return decrypted_message
 
-    def ring_sign(self, message: bytes, public_keys_g2: list) -> list:
+    def ring_sign(self, message: bytes, public_keys_g2: list) -> (list, int):
         rand_val = mcl.Fr.rnd().getStr()[27:]
         main_sig_idx = int.from_bytes(rand_val, byteorder="big") % (
             len(public_keys_g2) + 1
@@ -155,3 +156,10 @@ class SecrecyEngine:
             right_side *= mcl.GT.pairing(pk, sig_g2)
 
         return left_side == right_side
+
+    def secure_shuffle(self, array: list) -> (list, list):
+        # [TODO] not secure
+        indices = list(range(len(array)))
+        rand.shuffle(indices)
+        shuffled_array = [array[i] for i in indices]
+        return (shuffled_array, indices)

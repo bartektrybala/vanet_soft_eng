@@ -70,8 +70,9 @@ class BroadcastSocket(socket.socket):
             print("Waiting for periodic message thread to finish...")
             self.periodic_message_thread.join()
 
+        node_pks = self.node.session_pk1_str + "#" + self.node.session_pk2_str
         Broadcaster.broadcast(
-            prefix=NODE_DISCONNECT_PREFIX, socket=self, node_pk=self.node.session_pk_str
+            prefix=NODE_DISCONNECT_PREFIX, socket=self, node_pks=node_pks
         )
         self.close()
 
@@ -84,9 +85,11 @@ class BroadcastSocket(socket.socket):
     def _listen_to_broadcast(self):
         while not self.stop_threads:
             try:
-                data, addr = self.recvfrom(1024)
+                # [TODO] Read as until the string termination is found
+                # otherwise will break for longer key lists
+                data, addr = self.recvfrom(16384)
+                print(f"\n------------------MESSAGE FROM {addr} ------------------")
                 message = cast(BroadcastMessage, json.loads(data.decode("utf-8")))
-                print("\n------------------MESSAGE------------------")
                 print(message)
                 self._handle_message(message=message)
             except socket.timeout:
@@ -97,13 +100,16 @@ class BroadcastSocket(socket.socket):
         message_prefix = message["prefix"]
         if message_prefix == PUBLIC_KEY_BROADCAST_PREFIX:
             # someone broadcasted their pk, so add it to your list
-            self.node.add_public_key(pk_str=message["message"])
+            # Split the message into two pks
+            node_pks = message["message"].split("#")
+            self.node.add_public_key(node_pks[0], node_pks[1])
         elif message_prefix == COLLECT_PK_LIST_PREFIX:
             # someone wants to collect all the pks, so broadcast yours
+            node_pks = self.node.session_pk1_str + "#" + self.node.session_pk2_str
             Broadcaster.broadcast(
                 prefix=PUBLIC_KEY_BROADCAST_PREFIX,
                 socket=self,
-                node_pk=self.node.session_pk_str,
+                node_pks=node_pks,
             )
         elif message_prefix == SYNCHRONIZE_CLOCK_PREFIX:
             # someone wants to synchronize clocks, so master broadcasts his timestamp
@@ -120,7 +126,8 @@ class BroadcastSocket(socket.socket):
             self._start_periodic_messaging()
         elif message_prefix == NODE_DISCONNECT_PREFIX:
             # someone wants to disconnect, so remove their pk from your list
-            self.node.remove_public_key(pk_str=message["message"])
+            node_pks = message["message"].split("#")
+            self.node.remove_public_key(node_pks[0], node_pks[1])
 
     def _start_periodic_messaging(self):
         if (
@@ -129,14 +136,42 @@ class BroadcastSocket(socket.socket):
         ):
             self.periodic_message_thread = Thread(
                 target=lambda: self._periodic_messaging_thread(
-                    task=lambda: Broadcaster.broadcast(
-                        prefix=SECURITY_MESSAGE_PREFIX,
-                        socket=self,
-                        node_number=str(self.node.node_number),
-                    ),
+                    task=lambda: self._periodic_messaging_task()
                 )
             )
             self.periodic_message_thread.start()
+
+    def _periodic_messaging_task(self):
+        # [TODO] should not send its node number but some message
+        data_to_sign = str(self.node.node_number) + "##" + str(self.node.timestamp)
+
+        # Sign the message using the ring signature
+        public_keys2_as_bytes = [
+            bytes(str(pk), "utf-8") for pk in self.node.public_keys_g2
+        ]
+
+        signatures, main_sig_index = self.node.secrecy_engine.ring_sign(
+            message=bytes(data_to_sign, "utf-8"), public_keys_g2=public_keys2_as_bytes
+        )
+
+        public_keys2_as_bytes.insert(main_sig_index, self.node.session_pk2_str)
+        shuffled_pks, indices = self.node.secrecy_engine.secure_shuffle(
+            public_keys2_as_bytes
+        )
+        for i in range(len(signatures)):
+            signatures[i] = signatures[indices[i]]
+
+        # Create a string of the whole array using a join
+        # [TODO] DO NOT SEND whole keys, can send indices instead
+        signatures_as_str = "#".join([str(sig) for sig in signatures])
+        pks_as_str = "#".join([str(pk) for pk in shuffled_pks])
+
+        node_data =  data_to_sign + "##" + signatures_as_str + "##" + pks_as_str
+        Broadcaster.broadcast(
+            prefix=SECURITY_MESSAGE_PREFIX,
+            socket=self,
+            node_data=node_data,
+        )
 
     def _periodic_messaging_thread(self, task: Callable):
         while not self.stop_threads:

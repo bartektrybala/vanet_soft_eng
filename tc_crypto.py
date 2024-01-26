@@ -133,7 +133,11 @@ class TestSecrecyEngineRingSignature(unittest.TestCase):
 
         pk1_set = [pk[0].getStr() for pk in self.other_public_keys]
         pk1_set.insert(main_sig_idx, self.engine.session_pk1.getStr())
-        pk1_set[0] = self.engine.session_pk1.getStr()
+
+        fake_pk = self.engine.session_pk1.getStr()
+        fake_pk = fake_pk[:1] + bytes([fake_pk[1] ^ 0xFF]) + fake_pk[2:]
+        pk1_set[0] = fake_pk
+
         self.assertFalse(self.engine.ring_verify(message, signature, pk1_set))
 
     def test_sign_verify_wrong_signature(self):
