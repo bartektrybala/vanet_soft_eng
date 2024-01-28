@@ -87,6 +87,21 @@ class Node:
         print("\n------------------TIMESTAMP------------------")
         print(self.timestamp)
 
+    def is_valid_timestamp(self, timestamp: float, tolerance: float = 5.0) -> bool:
+      #  Validate the timestamp against the node's clock with a specified tolerance.
+        current_time = time.time()
+        time_deviation = abs(current_time - timestamp)
+        return time_deviation <= tolerance
+    
+    def handle_incoming_message(self, message: dict):
+        timestamp = message.get("timestamp", 0.0)
+        if not self.is_valid_timestamp(timestamp):
+            # Reject the message or take appropriate action for an invalid timestamp
+            print("Invalid timestamp! Rejecting the message.")
+            return
+        # Continue processing the message
+        print("Valid timestamp! Processing the message.")    
+
     def setup_periodic_message_broadcast(self):
         ...
 
