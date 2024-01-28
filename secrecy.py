@@ -58,9 +58,16 @@ class SecrecyEngine:
     def get_session_pk2_as_int(self) -> int:
         pk_b_str = self.session_pk2.getStr()
         return int.from_bytes(pk_b_str, byteorder="big")
+        
+    def calculate_mac(self, message: bytes, key: bytes) -> bytes:
+        # Calculate HMAC for the given message using the provided key.
+        h = hashlib.new("sha256", key)
+        h.update(message)
+        return h.digest()
+    
 
     def encrypt_hash_elgamal(
-        self, message: bytes, encryption_key_bytes: bytes
+       self, message: bytes, encryption_key_bytes: bytes
     ) -> (bytes, bytes):
         secret_eph: mcl.Fr = mcl.Fr.rnd()
         public_eph: mcl.G1 = self.generator1 * secret_eph
@@ -74,8 +81,11 @@ class SecrecyEngine:
         # Add 1 byte for guaranteed padding
         # Otherwise if message is divisible by hash length
         # we might have a case with unpadded message
+        # Calculate MAC
+        mac = self.calculate_mac(message, hash_key_bytes)
+        # Include MAC in the encrypted message
         encryption_bytes = self.hasher.concatenated_hashes(
-            len(message) + 1, hash_key_bytes
+            len(message) + 1, hash_key_bytes + mac
         )
         padded_message: bytes = pad_message(message, len(encryption_bytes))
 
@@ -95,8 +105,11 @@ class SecrecyEngine:
             len(encrypted_message) % _HASH_LENGTH == 0
         ), f"{len(encrypted_message)=} not divisible by {self.hasher.hash_length}"
 
+        # Calculate MAC
+        mac = self.calculate_mac(encrypted_message, hash_key_bytes)
+        # Include MAC in the decrypted message
         decryption_bytes: bytes = self.hasher.concatenated_hashes(
-            len(encrypted_message), hash_key_bytes
+            len(encrypted_message), hash_key_bytes + mac
         )
         decrypted_padded_message = xor_bytes(encrypted_message, decryption_bytes)
         decrypted_message = unpad_message(decrypted_padded_message)
