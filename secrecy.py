@@ -1,6 +1,7 @@
 import hashlib
 
 import mcl
+import secrets
 
 from utils.data_utils import extract_pem_key_from_message, get_file_contents
 from utils.hashing import Hasher, pad_message, unpad_message, xor_bytes
@@ -158,8 +159,9 @@ class SecrecyEngine:
         return left_side == right_side
 
     def secure_shuffle(self, array: list) -> (list, list):
-        # [TODO] not secure
-        indices = list(range(len(array)))
-        rand.shuffle(indices)
+        # Generate a secure random permutation of indices
+        indices = secrets.randperm(len(array))
+        # Shuffle the array based on the secure indices
         shuffled_array = [array[i] for i in indices]
         return (shuffled_array, indices)
+        
