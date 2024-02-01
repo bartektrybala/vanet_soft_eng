@@ -12,9 +12,11 @@ from settings import MASTER_CLOCK_PREFIX
 @dataclass
 class Node:
     secrecy_engine: SecrecyEngine
+    node_id: int
     public_keys_g1: list[int] = field(default_factory=list)
     public_keys_g2: list[int] = field(default_factory=list)
     timestamp: float = field(init=False, default_factory=time.time)
+    onion_list = []
 
     @cached_property
     def session_pk1_str(self) -> str:
@@ -59,6 +61,7 @@ class Node:
         print("\n------------------PUBLIC KEYS [NEW ADDED] ------------------")
         print(f"Public Keys G1: {self.public_keys_g1}")
         print(f"Public Keys G2: {self.public_keys_g2}")
+        print(f"KEYS LIST: {self.public_keys_g1}")
 
     def remove_public_key(self, pk1_str: str, pk2_str: str):
         # pem_pk = extract_pem_key_from_message(message=message)

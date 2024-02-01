@@ -74,12 +74,13 @@ def main():
     secrecy_engine.gen_session_keys()
     print(f"Session public key: {secrecy_engine.get_session_pk1_as_int()}")
 
-    node = Node(secrecy_engine=secrecy_engine)
+    node = Node(secrecy_engine=secrecy_engine, node_id = keys_index)
     client = BroadcastSocket(node=node)
     client.start_listen()
 
-    Broadcaster.broadcast(prefix=COLLECT_PK_LIST_PREFIX, socket=client)
-    Broadcaster.broadcast(prefix=SYNCHRONIZE_CLOCK_PREFIX, socket=client)
+    
+    Broadcaster.broadcast(prefix=COLLECT_PK_LIST_PREFIX, socket=client, received_from = node.node_id)
+    Broadcaster.broadcast(prefix=SYNCHRONIZE_CLOCK_PREFIX, socket=client, received_from = node.node_id)
 
 
 if __name__ == "__main__":
