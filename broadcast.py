@@ -90,7 +90,7 @@ class BroadcastSocket(socket.socket):
             try:
                 # [TODO] Read as until the string termination is found
                 # otherwise will break for longer key lists
-                data, addr = self.recvfrom(32768)
+                data, addr = self.recvfrom(131072)
                 print(f"\n------------------MESSAGE FROM {addr} ------------------")
                 message = cast(BroadcastMessage, json.loads(data.decode("utf-8")))
                 print(message)
@@ -123,7 +123,7 @@ class BroadcastSocket(socket.socket):
                     prefix=MASTER_CLOCK_PREFIX,
                     socket=self,
                     timestamp=str(self.node.timestamp),
-                    received_from = self.node.node_id,
+                    received_from = self.node.node_number,
                 )
         elif message_prefix == MASTER_CLOCK_PREFIX:
             # master broadcasted his timestamp, so update yours
@@ -139,21 +139,33 @@ class BroadcastSocket(socket.socket):
                 message_ = message["message"].split("#####")
                 ctext = message_[0]
                 eph_list = message_[1:]
+                # print("CTEXT")
+                # print(type(ctext))
+                # print(ctext)
+                # print("EPH_LIST")
+                # print(type(eph_list[0]))
+                # print(eph_list)
                 self.node.onion_list.append((ctext, eph_list, message["received_from"]))
                 if len(self.node.onion_list) == len(self.node.public_keys_g1):
-                    print("Received all cipher text")
-                    print(f"Onion list length: {len(self.node.onion_list)}")
+                    # print("Received all cipher text")
+                    # print(f"Onion list length: {len(self.node.onion_list)}")
                     self.delayer(len(self.node.public_keys_g1))
+                    self.node.onion_list.clear()
         elif message_prefix == DELAYER_MESSAGE_PREFIX:
-
-            
-            message = message['message'].split("###")
+            message = message['message'].split("#####")
             delayer_node_id = int(message[0])
-            self.node.onion_list = [(message[mes], message[mes + 1].split("##"), message[mes + 2]) for mes in range(1, 3, len(message[1:]) + 1)]
             if self.node.node_number == delayer_node_id:
+                mes = message[1].split("####")
+                self.node.onion_list = [(element[0], element[1].split("##"), element[2]) for element in [m.split("###") for m in mes]]
+                print("ONION LEN")
+                print(len(self.node.onion_list))
                 self.delayer(delayer_node_id)
                 if self.node.node_number == 1:
                     c_list = [onion[0] for onion in self.node.onion_list]
+                    # print("EPH_LIST")
+                    # print(type(c_list[0]))
+                    # print(len(c_list))
+                    # print(c_list)
                     self.verify(c_list)
                 self.node.onion_list.clear()
                 
@@ -161,16 +173,33 @@ class BroadcastSocket(socket.socket):
         for c in c_list:
             print("-----------WERYFIKACJA PODPISU---------")
             # print(f"data = {str(bytes.fromhex(c))}")
+            print("--C--")
+            print(type(c))
+            print(c)
             c = bytes.fromhex(c)
+            # c = bytes.fromhex(c).decode('utf-8')
+            # c = c.encode('utf-8')
+            print("--STRING--")
+            print(type(c))
+            print(c)
             data = c.split(b'#')
             # print(f"{data[0]=}")
             # print(f"{data[0].hex()=}")
             message = data[0]
             # print(f"{message=}")
-            # print(data)
-            signatures = [eval(d.decode('utf-8')) for d in data[1:len(self.node.public_keys_g1)+1]]
-            keys = [eval(d.decode('utf-8')) for d in data[len(self.node.public_keys_g1)+1:]]
-            # print(keys)
+            print(f"---DATA---")
+            print(data)
+            print(f"---MESSAGE---")
+            print(type(message))
+            print(message)
+            signatures = [eval(d) for d in data[1:len(self.node.public_keys_g1)+1]]
+            print(f"---SIGANTURES---")
+            print(type(signatures[0]))
+            print(signatures)
+            keys = [eval(d) for d in data[len(self.node.public_keys_g1)+1:]]
+            print(f"---KEYS---")
+            print(type(keys[0]))
+            print(keys)
             # print(signatures)
             # print(f"{len(keys)=}")
             # print(f"{len(signatures)=}")
@@ -181,11 +210,17 @@ class BroadcastSocket(socket.socket):
         print(f"ROZPOCZYNAM ZDEJMOWANIE LAYERA NUMER {delayer_node_id}")
         for i in range(len(self.node.onion_list)):
             onion_structure = self.node.onion_list[i]
-            print(onion_structure)
+            # print(onion_structure)
             ctext = onion_structure[0]
             eph = onion_structure[1][-1]
-            print(f"EPH= {eph}")
+            # print(f"EPH= {eph}")
             sender_id = int(onion_structure[2])
+            # print("CTEXT")
+            # print(type(ctext))
+            # print(ctext)
+            # print("EPH_LIST")
+            # print(type(onion_structure[0]))
+            # print(onion_structure)
             # print(f"Bytes of ctext: {bytes.fromhex(ctext)}")
             # print(f"Bytes of eph: {bytes.fromhex(eph)}")
             self.node.onion_list[i] \
@@ -193,15 +228,24 @@ class BroadcastSocket(socket.socket):
             # decrypted = self.node.secrecy_engine.decrypt_hash_elgamal(bytes(str(self.node.secrecy_engine.secret_key), "utf-8"), ctext.encode('ISO-8859-1'))
             # print(self.node.secrecy_engine.secret_key)
             print(f"decrypted: { self.node.onion_list[i]}")
+            # print("EPH_LIST")
+            # print(type(self.node.onion_list[i][0]))
+            # print(self.node.onion_list[i])
             print(f'ITERACJA: {sender_id}')
         self.node.onion_list, _ = self.node.secrecy_engine.secure_shuffle(self.node.onion_list)
-        node_data = str(delayer_node_id - 1) + "###" + "###".join(onion[0] + "###" + "##".join(str(o) for o in onion[1]) + "###" + str(onion[2]) for onion in self.node.onion_list)
+        # print("EPH_LIST")
+        # print(type(self.node.onion_list[i][0]))
+        # print(self.node.onion_list[i])
+        node_data = str(delayer_node_id - 1) + "#####" + "####".join(onion[0] + "###" + "##".join(o for o in onion[1]) + "###" + str(onion[2]) for onion in self.node.onion_list)
         # print("SZUFLA PRZESZLA")
+        # print("HUUUJ")
+        # print(type(node_data))
+        # print(node_data)
         Broadcaster.broadcast(
             prefix=DELAYER_MESSAGE_PREFIX,
             socket=self,
             node_data=node_data,
-            received_from = self.node.node_id,
+            received_from = self.node.node_number,
         )
 
     def _start_periodic_messaging(self):
@@ -230,12 +274,8 @@ class BroadcastSocket(socket.socket):
         ]
         key: int= self.node.session_pk2_int
         public_keys2_as_bytes.remove(int.to_bytes(key, (key.bit_length() + 7)//8, byteorder="big"))
-        
-        # for pk in self.node.public_keys_g2:
-        #     if pk != self.node.secrecy_engine.get_session_pk2_as_int:
-        #         public_keys1_as_bytes.append(int.to_bytes(pk, (pk.bit_length() + 7)//8, byteorder="big"))
 
-        signatures, main_sig_index = self.node.secrecy_engine.ring_sign(
+        signatures_, main_sig_index = self.node.secrecy_engine.ring_sign(
             message=bytes(data_to_sign, "utf-8"), public_keys_g2=public_keys2_as_bytes
         )
         
@@ -243,13 +283,16 @@ class BroadcastSocket(socket.socket):
         shuffled_pks, indices = self.node.secrecy_engine.secure_shuffle(
             public_keys2_as_bytes
         )
-        for i in range(len(signatures)):
-            signatures[i] = signatures[indices[i]]
-        print(shuffled_pks)
-        print(signatures)
-        print(f"{len(shuffled_pks)=}")
-        print(f"{len(signatures)=}")
+        signatures = [None] * len(signatures_)
+        for i in range(len(signatures_)):
+            signatures[i] = signatures_[indices[i]]
+        # print(shuffled_pks)
+        # print(signatures)
+        # print(f"{len(shuffled_pks)=}")
+        # print(f"{len(signatures)=}")
         signature = data_to_sign + "#" + "#".join([str(sig) for sig in signatures]) + "#" + "#".join(str(pk) for pk in shuffled_pks)
+        print("--SIGNATURE--")
+        print(signature)
         eph_list = []
         onion_encrypt = bytes(signature, "utf-8")
         print(f"Data to encrypt {onion_encrypt}" )
@@ -258,7 +301,7 @@ class BroadcastSocket(socket.socket):
             eph, onion_encrypt = self.node.secrecy_engine.encrypt_hash_elgamal(onion_encrypt, public_keys1_as_bytes[i])
             eph_list.append(eph)
            
-        print("WYSYLAM C")
+        print(f"WYSYLAM C od {self.node.node_number}")
             # try: 
             #     print(f"{eph=}")
             #     print(f"{onion_encrypt=}")
@@ -274,6 +317,8 @@ class BroadcastSocket(socket.socket):
         # print(eph_list)
 
         data_to_send = onion_encrypt.hex() + "#####" + "#####".join(eph.hex() for eph in eph_list)
+        print(type(data_to_send))
+        print(data_to_send)
         # print("DATA TO SEND")
         # print(data_to_send)
         
